@@ -6,6 +6,7 @@ namespace ShootEmUp
         fileName = "BulletConfig",
         menuName = "Bullets/New BulletConfig"
     )]
+
     public sealed class BulletConfig : ScriptableObject
     {
         [SerializeField]

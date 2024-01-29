@@ -3,92 +3,99 @@ using UnityEngine;
 
 namespace ShootEmUp
 {
+    public enum BulletType
+    {
+        Player,
+        Enemy
+    }
+
     public sealed class BulletSystem : MonoBehaviour
     {
         [SerializeField]
-        private int initialCount = 50;
-        
-        [SerializeField] private Transform container;
-        [SerializeField] private Bullet prefab;
-        [SerializeField] private Transform worldTransform;
-        [SerializeField] private LevelBounds levelBounds;
+        private int _initialBulletCount = 50;
+        [SerializeField] private LevelBounds _levelBounds;
+        [SerializeField] private BulletSpawner _spawner;
 
-        private readonly Queue<Bullet> m_bulletPool = new();
-        private readonly HashSet<Bullet> m_activeBullets = new();
-        private readonly List<Bullet> m_cache = new();
+        [SerializeField] private BulletConfig _enemyBulletConfig;
+        [SerializeField] private BulletConfig _playerBulletConfig;
+
+        private readonly HashSet<Bullet> _activeBullets = new();
+        private readonly List<Bullet> _bulletCache = new();
         
         private void Awake()
         {
-            for (var i = 0; i < this.initialCount; i++)
-            {
-                var bullet = Instantiate(this.prefab, this.container);
-                this.m_bulletPool.Enqueue(bullet);
-            }
+            _spawner = FindObjectOfType<BulletSpawner>();
+            _spawner.SpawnInitialBullets(_initialBulletCount);
         }
         
         private void FixedUpdate()
         {
-            this.m_cache.Clear();
-            this.m_cache.AddRange(this.m_activeBullets);
+            _bulletCache.Clear();
+            _bulletCache.AddRange(_activeBullets);
 
-            for (int i = 0, count = this.m_cache.Count; i < count; i++)
+            for (int i = 0, count = _bulletCache.Count; i < count; i++)
             {
-                var bullet = this.m_cache[i];
-                if (!this.levelBounds.InBounds(bullet.transform.position))
+                var bullet = _bulletCache[i];
+
+                if (!_levelBounds.InBounds(bullet.transform.position))
                 {
-                    this.RemoveBullet(bullet);
+                    RemoveBullet(bullet);
                 }
             }
         }
 
-        public void FlyBulletByArgs(Args args)
+        public void ShootBullet(BulletModel model)
         {
-            if (this.m_bulletPool.TryDequeue(out var bullet))
-            {
-                bullet.transform.SetParent(this.worldTransform);
-            }
-            else
-            {
-                bullet = Instantiate(this.prefab, this.worldTransform);
-            }
-
-            bullet.SetPosition(args.position);
-            bullet.SetColor(args.color);
-            bullet.SetPhysicsLayer(args.physicsLayer);
-            bullet.damage = args.damage;
-            bullet.isPlayer = args.isPlayer;
-            bullet.SetVelocity(args.velocity);
+            var bullet = _spawner.RequestBullet();
+            bullet.UpdateWithModel(model);
             
-            if (this.m_activeBullets.Add(bullet))
+            if (_activeBullets.Add(bullet))
             {
-                bullet.OnCollisionEntered += this.OnBulletCollision;
+                bullet.OnCollisionEntered += OnBulletCollision;
             }
         }
         
         private void OnBulletCollision(Bullet bullet, Collision2D collision)
         {
             BulletUtils.DealDamage(bullet, collision.gameObject);
-            this.RemoveBullet(bullet);
+            RemoveBullet(bullet);
         }
 
         private void RemoveBullet(Bullet bullet)
         {
-            if (this.m_activeBullets.Remove(bullet))
+            if (_activeBullets.Remove(bullet))
             {
-                bullet.OnCollisionEntered -= this.OnBulletCollision;
-                bullet.transform.SetParent(this.container);
-                this.m_bulletPool.Enqueue(bullet);
+                bullet.OnCollisionEntered -= OnBulletCollision;
+                _spawner.ReturnBullet(bullet);
             }
         }
-        
-        public struct Args
+
+        public void FireBulletOfType(BulletType type, Transform source, Vector2 direction)
         {
-            public Vector2 position;
-            public Vector2 velocity;
-            public Color color;
-            public int physicsLayer;
-            public int damage;
-            public bool isPlayer;
+            switch (type) {
+                case BulletType.Player:
+                    BulletModel playerBulletModel = new() {
+                        isPlayer = true,
+                        physicsLayer = (int)_playerBulletConfig.physicsLayer,
+                        color = _playerBulletConfig.color,
+                        damage = _playerBulletConfig.damage,
+                        position = source.transform.position,
+                        velocity = source.rotation * Vector3.up * _playerBulletConfig.speed
+                    };
+                    ShootBullet(playerBulletModel);
+                    break;
+                case BulletType.Enemy:
+                    BulletModel enemyBulletModel = new() {
+                        isPlayer = false,
+                        physicsLayer = (int)_enemyBulletConfig.physicsLayer,
+                        color = _enemyBulletConfig.color,
+                        damage = _enemyBulletConfig.damage,
+                        position = source.transform.position,
+                        velocity = direction * _enemyBulletConfig.speed
+                    };
+                    ShootBullet(enemyBulletModel);
+                    break;
+            }
         }
     }
 }

@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 
 namespace ShootEmUp
@@ -6,36 +7,33 @@ namespace ShootEmUp
     {
         public float HorizontalDirection { get; private set; }
 
-        [SerializeField]
-        private GameObject character;
-
-        [SerializeField]
-        private CharacterController characterController;
+        public Action OnFireTriggered;
+        public Action<float> OnInputChanged;
 
         private void Update()
         {
             if (Input.GetKeyDown(KeyCode.Space))
             {
-                characterController._fireRequired = true;
+                OnFireTriggered();
             }
 
-            if (Input.GetKey(KeyCode.LeftArrow))
+            if (Input.GetKey(KeyCode.LeftArrow) || Input.GetKey(KeyCode.A))
             {
-                this.HorizontalDirection = -1;
+                HorizontalDirection = -1;
             }
-            else if (Input.GetKey(KeyCode.RightArrow))
+            else if (Input.GetKey(KeyCode.RightArrow) || Input.GetKey(KeyCode.D))
             {
-                this.HorizontalDirection = 1;
+                HorizontalDirection = 1;
             }
             else
             {
-                this.HorizontalDirection = 0;
+                HorizontalDirection = 0;
             }
         }
-        
+
         private void FixedUpdate()
         {
-            this.character.GetComponent<MoveComponent>().MoveByRigidbodyVelocity(new Vector2(this.HorizontalDirection, 0) * Time.fixedDeltaTime);
+            OnInputChanged(HorizontalDirection);
         }
     }
 }
